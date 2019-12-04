@@ -13,7 +13,13 @@
 #include <Line.h>
 
 //now we can start declaring all the variables we need
+
+///////////////////////////////////////////////////////////////////////////////////
+//TODO: USER CHANGED VALUES BASED ON CIRCUIT SETUP
 uint8_t inputPins[] = {15, 10, 6, 3, 7, 14, 2, 5}; //pins that we are using; you will likely need to change which ones you use
+
+///////////////////////////////////////////////////////////////////////////////////////
+
 float Pitches[] = {1046.5, 1174.66, 1318.51, 1396.91, 1567.98, 1760, 1975.53, 2093}; //standard pitches for an octave starting at C5 --> C6
 byte controlLoop = 0; //use to create sqwitch case for controlLoop optimization
 uint8_t volumes[sizeof(inputPins)] = {0, 0, 0, 0, 0, 0, 0, 0}; //array that we use to collect button states
