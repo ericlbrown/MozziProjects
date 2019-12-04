@@ -1,26 +1,30 @@
 #include <MozziGuts.h>   // at the top of your sketch
 #include <Smooth.h>
-#include <IntMap.h>
 #include <Oscil.h> // oscillator template
-//#include <PinChangeInt.h> //for interrupt  routine with mozzi needs code from here: http://code.google.com/p/arduino-pinchangeint/
+#include <IntMap.h>
+//the wavetables that I chose to use for the project; there are more or you can create your own with utilities like MATLAB or an inculded .py script
 #include <tables/sin2048_int8.h>
 #include <tables/saw2048_int8.h>
 #include <tables/square_no_alias_2048_int8.h>
 #include <tables/triangle2048_int8.h>
+
+//additional headers for features we make use of
 #include <EventDelay.h>
 #include <Line.h>
-uint8_t inputPins[] = {15, 10, 6, 3, 7, 14, 2, 5}; //pins that we are using
-float Pitches[] = {1046.5, 1174.66, 1318.51, 1396.91, 1567.98, 1760, 1975.53, 2093}; //standard pitches for an octave starting at C5 --> C6
-byte Volume = 1;
-byte controlLoop = 0;
-uint8_t volumes[sizeof(inputPins)] = {0, 0, 0, 0, 0, 0, 0, 0};
-byte WaveTableIU = 1; //keeps track of which waveform we are currently using for our synth
-#define CONTROL_RATE 64
 
+//now we can start declaring all the variables we need
+uint8_t inputPins[] = {15, 10, 6, 3, 7, 14, 2, 5}; //pins that we are using; you will likely need to change which ones you use
+float Pitches[] = {1046.5, 1174.66, 1318.51, 1396.91, 1567.98, 1760, 1975.53, 2093}; //standard pitches for an octave starting at C5 --> C6
+byte controlLoop = 0; //use to create sqwitch case for controlLoop optimization
+uint8_t volumes[sizeof(inputPins)] = {0, 0, 0, 0, 0, 0, 0, 0}; //array that we use to collect button states
+byte WaveTableIU = 1; //keeps track of which waveform we are currently using for our synth
+
+#define CONTROL_RATE 64 //the control rate is how fast the updateControl function gets called in Hz, 64 or 128 both work, but 128 becomes taxxing
+
+//intmap is a class in Mozzi to create faster intput value mapping to a scale of our choice
 const IntMap testIntMap(0, 1023, 0, 25);
 const IntMap externalVolume(0, 1023, 0, 5);
-// the number of audio steps the line has to take to reach the next control value
-const unsigned int AUDIO_STEPS_PER_CONTROL = AUDIO_RATE / CONTROL_RATE;
+
 
 //here we will setup all of our oscillators for each of the individual notes
 Oscil <2048, AUDIO_RATE> key1(SIN2048_DATA);
@@ -34,6 +38,9 @@ Oscil <2048, AUDIO_RATE> key8(SIN2048_DATA);
 
 // control oscillator for tremelo
 Oscil<SIN2048_NUM_CELLS, CONTROL_RATE> kTremelo(SIN2048_DATA);
+
+// the number of audio steps the line has to take to reach the next control value
+const unsigned int AUDIO_STEPS_PER_CONTROL = AUDIO_RATE / CONTROL_RATE;
 // a line to interpolate control tremolo at audio rate
 Line <unsigned int> aGain;
 
@@ -42,17 +49,18 @@ int sumTerm = 1; //used to hopefully normalize sound
 
 
 
-EventDelay kSwapTablesDelay; //event delay for reading the oscillator switch
-void setup() {
-  // Serial.begin(9600);
+EventDelay kSwapTablesDelay; //event delay for reading the oscillator switch, fancy way of putting a debounce on the table switch without using any form of delay()
+
+void setup() { //where we take care of all our starting functions and object instantiation
   startMozzi(CONTROL_RATE); //instiation for the Mozzi library with the predetermined control rate --> can be changed for more responsive feedback
-  kSwapTablesDelay.set(500); //sample the SwapButton at 2Hz
+  kSwapTablesDelay.set(500); //sets sampling of the WavetableSwapButton at 2Hz, make this way less if you want a funky effect while holding the button
 
   //code to adjust the octave
   for (int i = 0; i < 8; i++) {
-    Pitches[i] *= 1;
+    Pitches[i] *= 1; //change to 2^(a) where a is any whole number, for C-C octave, play around for other possible tunings/scales
   }
   
+//setting all the button pins which we set in an array earlier as pullups to avoid using resistors
   pinMode(inputPins[0], INPUT_PULLUP);
   pinMode(inputPins[1], INPUT_PULLUP);
   pinMode(inputPins[2], INPUT_PULLUP);
@@ -61,10 +69,14 @@ void setup() {
   pinMode(inputPins[5], INPUT_PULLUP);
   pinMode(inputPins[6], INPUT_PULLUP);
   pinMode(inputPins[7], INPUT_PULLUP);
-  pinMode(8, INPUT_PULLUP); //wavetable pin
-  //pinMode(12, INPUT_PULLUP);
 
-  //set all baseline frequencies
+  ///////////////////////////////////////////////////////////////////////////////////////////////////////
+//         NEED TO CHANGE THIS ONE!!!!!!!!!!!!!!!
+  pinMode(8, INPUT_PULLUP); //wavetable pin, write this one on your own since it doesn't belong in the table
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  //set all baseline frequencies from the table above
   key1.setFreq(Pitches[0]);
   key2.setFreq(Pitches[1]);
   key3.setFreq(Pitches[2]);
@@ -79,7 +91,7 @@ void setup() {
 void updateControl() {
   // your control code
   sumTerm = 1;
-  switch (controlLoop % 4) { //attempt to break up code to speed up the control loop
+  switch (controlLoop % 4) { //attempt to break up code to speed up the control loop so we only adjust certain params each call
     case 0:
       volumes[0] = !digitalRead(inputPins[0]);
       volumes[1] = !digitalRead(inputPins[1]);
@@ -117,7 +129,9 @@ void updateControl() {
     sumTerm = sumTerm - 1; //averages out our value again
   }
 }
-void changeWaveTable()  //function called on pin interrupt
+
+
+void changeWaveTable()  //function called on pin interrupt to change the wave shape for each osccilator
 {
   // Serial.println("press");
   // key1.setTable(SAW2048_DATA);
